@@ -1,32 +1,60 @@
-const express = require('express');
-const request = require('request-promise-native');
+const express = require("express");
+const request = require("request-promise-native");
 const router = express.Router();
 
+const cleanupVersion = version => {
+  if (version.substr(0, 1) === "^" || version.substr(0, 1) === "~") {
+    return version.substr(1);
+  }
+  return version;
+};
+
+const getDependencies = async (name, version) => {
+  let response = await request(
+    `https://registry.npmjs.org/${name}/${version}`,
+    {
+      resolveWithFullResponse: true,
+      json: true
+    }
+  );
+  let dependencies = response.body.dependencies;
+
+  if (!dependencies) {
+    return [];
+  }
+
+  let dependencyNames = Object.keys(dependencies);
+
+  return dependencyNames.map(dependency => {
+    return [dependency, cleanupVersion(dependencies[dependency])];
+  });
+};
+
+const getTransitiveDependencies = async (name, version) => {
+  let directDependencies = await getDependencies(name, version);
+
+  let dependencies = [...directDependencies];
+
+  for (let [depName, depVersion] of directDependencies) {
+    dependencies = [
+      ...dependencies,
+      ...(await getTransitiveDependencies(depName, depVersion))
+    ];
+  }
+  return dependencies;
+};
+
 /* GET package information. */
-router.get('/:packageName/:packageVersion?', async (req, res, next) => {
-  const { params } = req;
-  // const params = req.params;
-  const packageVersion = params.packageVersion || 'latest';
+router.get("/:packageName/:packageVersion?", async (req, res, next) => {
+  let packageName = req.params.packageName;
+  let packageVersion = req.params.packageVersion || "latest";
 
+  let dependencies = await getTransitiveDependencies(
+    packageName,
+    packageVersion
+  );
 
-  let dependencyPackageName = Object.keys(data.dependencies);
-  let dependencyPackageVersion = Object.values(data.dependencies);
-
-  const npmRes = await request(`https://registry.npmjs.org/${params.packageName}/${packageVersion}`, {
-    resolveWithFullResponse: true,
-    json: true,
-  })
-    .then.map(data => 
-      request(`https://registry.npmjs.org/${dependencyPackageName}/${dependencyPackageVersion}`))
-
-  const { name, version, dependencies } = npmRes.body;
-
-  res.status(npmRes.statusCode)
-    .json({
-      name,
-      version,
-      dependencies
-    });
+  res.send(dependencies);
 });
 
 module.exports = router;
