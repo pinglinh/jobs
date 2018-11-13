@@ -38,11 +38,7 @@ test("/package/css gets transitive dependencies", async t => {
     json: true
   });
 
-  console.log("this is res.json", res.json);
-
   t.equal(res.json, responseForCssPackage, "returns transitive dependency");
-
-  console.log("this is res.json 2", res.json);
 });
 
 test("teardown", async () => {
